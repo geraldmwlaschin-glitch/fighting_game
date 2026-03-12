@@ -1,0 +1,51 @@
+import math
+import pygame
+
+class Powerup:
+    """Base powerup class"""
+    def __init__(self, x, y):
+        self.x = float(x)
+        self.y = float(y)
+        self.radius = 10
+        self.lifetime = 600  # 10 seconds at 60 FPS
+        self.collected = False
+    
+    def update(self):
+        """Update powerup state"""
+        self.lifetime -= 1
+        return self.lifetime > 0
+    
+    def apply(self, player):
+        """Apply powerup effect to player"""
+        pass
+    
+    def get_color(self):
+        """Return color for drawing"""
+        return (255, 255, 255)
+
+class ShieldPowerup(Powerup):
+    """Shield/Health powerup"""
+    def get_color(self):
+        return (100, 200, 255)
+    
+    def apply(self, player):
+        player.invincible = True
+        player.invincible_end_time = pygame.time.get_ticks() + 8000  # 8 seconds
+
+class RapidFirePowerup(Powerup):
+    """Rapid fire powerup"""
+    def get_color(self):
+        return (255, 200, 100)
+    
+    def apply(self, player):
+        player.rapid_fire = True
+        player.rapid_fire_end_time = pygame.time.get_ticks() + 10000  # 10 seconds (increased from 6)
+
+class ScorePowerup(Powerup):
+    """Score multiplier powerup"""
+    def get_color(self):
+        return (255, 255, 100)
+    
+    def apply(self, player):
+        # This just gives points when collected
+        pass
