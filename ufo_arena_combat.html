@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UFO.io - Arena Combat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 2px solid #00ffff;
+            background-color: #141432;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const SCREEN_WIDTH = 800;
+        const SCREEN_HEIGHT = 600;
+        const FPS = 60;
+
+        // Game state
+        let player = {
+            x: SCREEN_WIDTH / 2,
+            y: SCREEN_HEIGHT / 2,
+            radius: 20,
+            vx: 0,
+            vy: 0,
+            boost: false,
+            bullets: [],
+            last_shot: 0,
+            rapid_fire: false,
+            rapid_fire_end_time: 0
+        };
+
+        let enemies = [];
+        let powerups = [];
+        let score = 0;
+        let combo = 0;
+        let combo_timer = 0;
+        let paused = false;
+        let game_over = false;
+        let game_over_time = 0;
+        let start_time = Date.now();
+        let enemy_spawn_counter = 0;
+        let difficulty = 0;
+
+        // Input handling
+        const keys = {};
+        window.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+            
+            if (e.key.toLowerCase() === 'c') {
+                paused = !paused;
+            }
+            if (e.key.toLowerCase() === 'r' && game_over) {
+                restart_game();
+            }
+            if (e.key === ' ') {
+                player.boost = true;
+                e.preventDefault();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+            if (e.key === ' ') {
+                player.boost = false;
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            // Update mouse position for aiming
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (!paused && !game_over) {
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                create_bullet(player.x, player.y, mouseX, mouseY);
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            // For continuous fire
+            if (!paused && !game_over) {
+                const rect = canvas.getBoundingClientRect();
+                window.mouseX = e.clientX - rect.left;
+                window.mouseY = e.clientY - rect.top;
+            }
+        });
+
+        // Mouse tracking for continuous fire
+        let mouseDown = false;
+        window.addEventListener('mousedown', () => { mouseDown = true; });
+        window.addEventListener('mouseup', () => { mouseDown = false; });
+
+        function spawn_enemy() {
+            const side = ['top', 'bottom', 'left', 'right'][Math.floor(Math.random() * 4)];
+            let x, y;
+
+            if (side === 'top') {
+                x = Math.random() * SCREEN_WIDTH;
+                y = -30;
+            } else if (side === 'bottom') {
+                x = Math.random() * SCREEN_WIDTH;
+                y = SCREEN_HEIGHT + 30;
+            } else if (side === 'left') {
+                x = -30;
+                y = Math.random() * SCREEN_HEIGHT;
+            } else {
+                x = SCREEN_WIDTH + 30;
+                y = Math.random() * SCREEN_HEIGHT;
+            }
+
+            enemies.push({
+                x: x,
+                y: y,
+                speed: 1.5 + (difficulty * 0.2),
+                health: 1,
+                radius: 12
+            });
+        }
+
+        function spawn_powerup(x, y) {
+            const type = Math.random() > 0.5 ? 'rapid_fire' : 'score';
+            powerups.push({
+                x: x,
+                y: y,
+                type: type,
+                radius: 8,
+                lifetime: 300,
+                age: 0
+            });
+        }
+
+        function create_bullet(x, y, targetX, targetY) {
+            const dx = targetX - x;
+            const dy = targetY - y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > 0) {
+                player.bullets.push({
+                    x: x,
+                    y: y,
+                    vx: (dx / dist) * 8,
+                    vy: (dy / dist) * 8,
+                    radius: 4
+                });
+            }
+            player.last_shot = Date.now();
+        }
+
+        function update_enemies() {
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+
+                // Move toward player
+                const dx = player.x - enemy.x;
+                const dy = player.y - enemy.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist > 1) {
+                    enemy.x += (dx / dist) * enemy.speed;
+                    enemy.y += (dy / dist) * enemy.speed;
+                }
+
+                // Check collision with bullets
+                let hit = false;
+                for (let j = player.bullets.length - 1; j >= 0; j--) {
+                    const bullet = player.bullets[j];
+                    const bullet_dist = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
+
+                    if (bullet_dist < 25) {
+                        enemy.health -= 1;
+                        player.bullets.splice(j, 1);
+                        hit = true;
+                        break;
+                    }
+                }
+
+                if (hit && enemy.health <= 0) {
+                    enemies.splice(i, 1);
+                    combo += 1;
+                    combo_timer = 120;
+                    const bonus = 10 + (combo * 5);
+                    score += bonus;
+
+                    // Spawn powerup 30% of the time
+                    if (Math.random() < 0.3) {
+                        spawn_powerup(enemy.x, enemy.y);
+                    }
+                    continue;
+                }
+
+                // Check collision with player
+                const player_dist = Math.sqrt((player.x - enemy.x) ** 2 + (player.y - enemy.y) ** 2);
+                if (player_dist < 40) {
+                    game_over = true;
+                    game_over_time = Date.now();
+                }
+            }
+        }
+
+        function update_powerups() {
+            for (let i = powerups.length - 1; i >= 0; i--) {
+                const powerup = powerups[i];
+                powerup.age += 1;
+
+                if (powerup.age > powerup.lifetime) {
+                    powerups.splice(i, 1);
+                    continue;
+                }
+
+                // Check collection by player
+                const dist = Math.sqrt((powerup.x - player.x) ** 2 + (powerup.y - player.y) ** 2);
+                if (dist < 35) {
+                    if (powerup.type === 'score') {
+                        score += 50;
+                    } else if (powerup.type === 'rapid_fire') {
+                        player.rapid_fire = true;
+                        player.rapid_fire_end_time = Date.now() + 5000;
+                    }
+                    powerups.splice(i, 1);
+                }
+            }
+        }
+
+        function update() {
+            if (!paused && !game_over) {
+                // Handle movement
+                let dx = 0;
+                let dy = 0;
+
+                if (keys['a']) dx -= 4;
+                if (keys['d']) dx += 4;
+                if (keys['w']) dy -= 4;
+                if (keys['s']) dy += 4;
+                
+                // Apply boost
+                if (player.boost) {
+                    dx = Math.floor(dx * 1.5);
+                    dy = Math.floor(dy * 1.5);
+                }
+
+                // Move player with boundary checking
+                player.x = Math.max(10, Math.min(player.x + dx, SCREEN_WIDTH - 30));
+                player.y = Math.max(10, Math.min(player.y + dy, SCREEN_HEIGHT - 30));
+
+                // Continuous fire
+                if (mouseDown && window.mouseX && window.mouseY) {
+                    const current_time = Date.now();
+                    const fire_cooldown = player.rapid_fire ? 20 : 50;
+                    if (current_time - player.last_shot > fire_cooldown) {
+                        create_bullet(player.x, player.y, window.mouseX, window.mouseY);
+                    }
+                }
+
+                // Update bullets
+                for (let i = player.bullets.length - 1; i >= 0; i--) {
+                    const bullet = player.bullets[i];
+                    bullet.x += bullet.vx;
+                    bullet.y += bullet.vy;
+
+                    if (bullet.y < -10 || bullet.y > SCREEN_HEIGHT + 10 || 
+                        bullet.x < -10 || bullet.x > SCREEN_WIDTH + 10) {
+                        player.bullets.splice(i, 1);
+                    }
+                }
+
+                update_enemies();
+                update_powerups();
+
+                // Combo timer
+                if (combo_timer > 0) {
+                    combo_timer -= 1;
+                } else {
+                    combo = 0;
+                }
+
+                // Spawn enemies based on difficulty
+                enemy_spawn_counter += 1;
+                const spawn_rate = Math.max(20, 100 - Math.floor(difficulty * 8));
+                if (enemy_spawn_counter > spawn_rate) {
+                    enemy_spawn_counter = 0;
+                    spawn_enemy();
+                }
+
+                // Increase difficulty over time
+                const elapsed_s = (Date.now() - start_time) / 1000;
+                difficulty = elapsed_s / 15;
+            }
+
+            // Check if rapid fire has expired
+            if (player.rapid_fire && Date.now() > player.rapid_fire_end_time) {
+                player.rapid_fire = false;
+            }
+
+            draw();
+        }
+
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#141432';
+            ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+            // Draw grid background
+            ctx.strokeStyle = '#282850';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < SCREEN_WIDTH; x += 50) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, SCREEN_HEIGHT);
+                ctx.stroke();
+            }
+            for (let y = 0; y < SCREEN_HEIGHT; y += 50) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(SCREEN_WIDTH, y);
+                ctx.stroke();
+            }
+
+            if (!game_over) {
+                // Draw enemies
+                for (const enemy of enemies) {
+                    ctx.fillStyle = '#ff6464';
+                    ctx.beginPath();
+                    ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Draw powerups
+                for (const powerup of powerups) {
+                    const color = powerup.type === 'rapid_fire' ? '#ff6400' : '#ffd700';
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    ctx.arc(powerup.x, powerup.y, powerup.radius, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(powerup.x, powerup.y, powerup.radius, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                // Draw bullets
+                for (const bullet of player.bullets) {
+                    ctx.fillStyle = '#00ff00';
+                    ctx.beginPath();
+                    ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Draw player
+                ctx.fillStyle = '#00ffff';
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.strokeStyle = '#64ffff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Draw HUD
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '36px Arial';
+
+                const elapsed_s = (Date.now() - start_time) / 1000;
+                ctx.fillText(`Time: ${Math.floor(elapsed_s)}s`, 10, 35);
+                ctx.fillText(`Score: ${score}`, 10, 75);
+
+                ctx.font = '24px Arial';
+                ctx.fillText(`Enemies: ${enemies.length}`, 10, 105);
+
+                // Draw combo
+                if (combo > 0) {
+                    const combo_color = combo_timer > 60 ? '#ffff64' : '#ff9632';
+                    ctx.fillStyle = combo_color;
+                    ctx.font = '36px Arial';
+                    ctx.fillText(`COMBO x${combo}!`, SCREEN_WIDTH - 280, 35);
+                }
+
+                // Draw rapid fire status
+                if (player.rapid_fire) {
+                    const remaining_ms = Math.max(0, player.rapid_fire_end_time - Date.now());
+                    const remaining_s = (remaining_ms / 1000).toFixed(1);
+                    ctx.fillStyle = '#ffc864';
+                    ctx.font = '24px Arial';
+                    ctx.fillText(`Rapid Fire: ${remaining_s}s`, 10, 135);
+                }
+
+                // Draw pause screen
+                if (paused) {
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = '36px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('Paused (press C to resume)', SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
+                    ctx.textAlign = 'left';
+                }
+            } else {
+                // Game over screen
+                const elapsed_s = (Date.now() - start_time) / 1000;
+
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+                ctx.fillStyle = '#ff3232';
+                ctx.font = 'bold 48px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('YOU DIED!', SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 80);
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '36px Arial';
+                ctx.fillText(`Final Score: ${score}`, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 10);
+                ctx.fillText(`Survived: ${Math.floor(elapsed_s)}s`, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 60);
+
+                ctx.font = '24px Arial';
+                ctx.fillText('Press R to restart', SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 120);
+                ctx.textAlign = 'left';
+            }
+        }
+
+        function restart_game() {
+            player.x = SCREEN_WIDTH / 2;
+            player.y = SCREEN_HEIGHT / 2;
+            player.bullets = [];
+            player.rapid_fire = false;
+            enemies = [];
+            powerups = [];
+            score = 0;
+            combo = 0;
+            combo_timer = 0;
+            paused = false;
+            game_over = false;
+            start_time = Date.now();
+            enemy_spawn_counter = 0;
+            difficulty = 0;
+        }
+
+        // Game loop
+        setInterval(update, 1000 / FPS);
+
+        console.log('Controls: WASD to move, Space for speed boost, Mouse to aim and shoot, C to pause/resume, R to restart');
+    </script>
+</body>
+</html>
