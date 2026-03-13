@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UFO Arena Combat</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #0a0a0a;
+            color: white;
+            font-family: 'Arial', sans-serif;
+        }
+        canvas {
+            display: block;
+            background-color: #111;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let player = { x: canvas.width / 2, y: canvas.height / 2, radius: 20, speed: 5 };
+        let bullets = [];
+        let enemies = [];
+        let powerups = [];
+        let score = 0;
+        let combo = 0;
+        let rapidFire = false;
+        let pause = false;
+
+        document.addEventListener('keydown', (event) => {
+            if(event.key === 'w') player.y -= player.speed;
+            if(event.key === 's') player.y += player.speed;
+            if(event.key === 'a') player.x -= player.speed;
+            if(event.key === 'd') player.x += player.speed;
+            if(event.key === 'c') pause = !pause;
+            if(event.key === 'r') restart();
+        });
+
+        canvas.addEventListener('click', (event) => {
+            if (!pause) {
+                let x = event.clientX;
+                let y = event.clientY;
+                shoot(x, y);
+            }
+        });
+
+        function shoot(targetX, targetY) {
+            let angle = Math.atan2(targetY - player.y, targetX - player.x);
+            bullets.push({
+                x: player.x,
+                y: player.y,
+                angle: angle,
+                speed: rapidFire ? 10 : 5
+            });
+        }
+
+        function update() {
+            if (pause) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#00ff00';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+            bullets.forEach(bullet => moveBullet(bullet));
+            enemies.forEach(enemy => moveEnemy(enemy));
+            drawScore();
+            requestAnimationFrame(update);
+        }
+
+        function moveBullet(bullet) {
+            bullet.x += Math.cos(bullet.angle) * bullet.speed;
+            bullet.y += Math.sin(bullet.angle) * bullet.speed;
+            ctx.fillStyle = 'yellow';
+            ctx.beginPath();
+            ctx.arc(bullet.x, bullet.y, 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function moveEnemy(enemy) {
+            // Enemy movement logic goes here
+        }
+
+        function drawScore() {
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.fillText('Score: ' + score, 10, 30);
+            ctx.fillText('Combo: ' + combo, 10, 60);
+        }
+
+        function restart() {
+            player.x = canvas.width / 2;
+            player.y = canvas.height / 2;
+            bullets = [];
+            enemies = [];
+            powerups = [];
+            score = 0;
+            combo = 0;
+        }
+
+        update();
+    </script>
+</body>
+</html>
