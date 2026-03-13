@@ -1,4 +1,4 @@
-# UFO Arena Combat
+
 # UFO Arena Combat - Web Version
 
 import pygame
