@@ -7,15 +7,15 @@
 body { margin:0; background: green; overflow:hidden; }
 canvas { display:block; margin:auto; background:#141432; }
 </style>
-</head>
-<body>
-<h1>a Geebob inc. Production</h1>
 
 <a href="https://geebob-inc.github.io/webs/" target="_blank">
-Check out more from Geebob inc. here:
+<br>Check out more from Geebob inc. here: 
 </a>
+</head>
+<body>
+    <h1>a Geebob inc. Production</h1>
 
-<canvas id="gameCanvas" width="930" height="425"></canvas>
+<canvas id="gameCanvas" width="930" height="450"></canvas>
 <script>
 
 /* --------- PLAYER --------- */
@@ -67,8 +67,6 @@ class Powerup {
         } else if(this.type=="score"){
             score+=50;
         }
-        powerupSound.currentTime = 0;
-        powerupSound.play();
     }
     getColor(){
         return this.type=="rapid"?"orange":"yellow";
@@ -95,22 +93,6 @@ const keys={};
 document.addEventListener("keydown",e=>keys[e.key]=true);
 document.addEventListener("keyup",e=>keys[e.key]=false);
 
-/* --------- SOUNDS --------- */
-const shootSound = new Audio("shoot.wav");
-const hitSound = new Audio("explosion.wav");
-const powerupSound = new Audio("powerup.wav");
-const deathSound = new Audio("death.wav");
-
-shootSound.volume = 0.3;
-hitSound.volume = 0.4;
-powerupSound.volume = 0.5;
-deathSound.volume = 0.6;
-
-// unlock audio on first click (browser requirement)
-document.addEventListener("click", () => {
-    shootSound.play().then(()=>shootSound.pause()).catch(()=>{});
-});
-
 /* --------- HELPER FUNCTIONS --------- */
 function spawnEnemy(){
     let side=["top","bottom","left","right"][Math.floor(Math.random()*4)];
@@ -130,7 +112,7 @@ function spawnPowerup(x,y){
 /* --------- GAME LOOP --------- */
 function gameLoop(){
     requestAnimationFrame(gameLoop);
-
+    // Update
     if(!paused && !game_over){
         // Player movement
         let dx=0, dy=0;
@@ -151,8 +133,6 @@ function gameLoop(){
             let vy=(dym/dist)*8;
             player.bullets.push(new Bullet(player.x,player.y,vx,vy));
             player.last_shot=now;
-            shootSound.currentTime = 0;
-            shootSound.play();
         }
 
         // Update bullets
@@ -175,8 +155,6 @@ function gameLoop(){
                 if(Math.hypot(b.x-e.x,b.y-e.y)<25){
                     e.health-=1;
                     player.bullets.splice(j,1);
-                    hitSound.currentTime = 0;
-                    hitSound.play();
                 }
             }
             if(e.health<=0){
@@ -189,7 +167,6 @@ function gameLoop(){
 
             // Player collision
             if(Math.hypot(player.x-e.x,player.y-e.y)<40){
-                if(!game_over) deathSound.play();
                 game_over=true;
             }
         }
@@ -287,7 +264,7 @@ function gameLoop(){
         ctx.fillStyle="white"; ctx.font="24px sans-serif";
         ctx.fillText("Final Score: "+score,canvas.width/2-80,canvas.height/2);
         ctx.fillText("Press R to restart",canvas.width/2-90,canvas.height/2+40);
-        ctx.fillText("Miracles are possible, this ^is one of them!",canvas.width/3-90,canvas.height/2+20);
+       ctx.fillText("Miracles are possible, this ^is one of them!",canvas.width/3-90,canvas.height/2+20);
     }
 }
 
